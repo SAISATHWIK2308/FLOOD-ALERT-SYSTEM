@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COASTAL FLOOD & STORM SURGE RESCUE SYSTEM | Real-Time Monitoring & Command</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#080d1a',
+                        cardBg: '#111a2e',
+                        cardBgHover: '#18243f',
+                        borderCol: '#202f4e',
+                        brandBlue: '#3b82f6',
+                        dangerRed: '#ef4444',
+                        warningAmber: '#f59e0b',
+                        successGreen: '#10b981',
+                        accentCyan: '#06b6d4',
+                        oceanTeal: '#0ea5e9'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #080d1a;
+            color: #f1f5f9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow-x: hidden;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #080d1a;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #202f4e;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #3b82f6;
+        }
+
+        @keyframes radar-pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 14px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .radar-danger {
+            animation: radar-pulse 2s infinite;
+        }
+
+        .glass-card {
+            background: rgba(17, 26, 46, 0.88);
+            backdrop-filter: blur(12px);
+            border: 1px solid #202f4e;
+            transition: all 0.25s ease-in-out;
+        }
+        .glass-card:hover {
+            border-color: #38bdf8;
+            box-shadow: 0 8px 24px -6px rgba(14, 165, 233, 0.25);
+        }
+
+        #floodMap {
+            height: 500px;
+            width: 100%;
+            border-radius: 0.75rem;
+            z-index: 10;
+        }
+        .leaflet-container {
+            background: #0f172a !important;
+            font-family: inherit !important;
+        }
+
+        .leaflet-tooltip-custom {
+            background: rgba(8, 13, 26, 0.95) !important;
+            border: 1px solid #38bdf8 !important;
+            color: #ffffff !important;
+            font-weight: 700 !important;
+            font-size: 11px !important;
+            border-radius: 6px !important;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.6) !important;
+            padding: 4px 8px !important;
+        }
+        .leaflet-tooltip-custom:before {
+            border-top-color: #38bdf8 !important;
+        }
+
+        .leaflet-popup-content-wrapper {
+            background: rgba(8, 13, 26, 0.96) !important;
+            border: 1px solid #0ea5e9 !important;
+            color: #f8fafc !important;
+            border-radius: 10px !important;
+            box-shadow: 0 12px 28px rgba(0,0,0,0.8) !important;
+        }
+        .leaflet-popup-tip {
+            background: #080d1a !important;
+        }
+
+        .map-control-btn {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid #334155;
+            color: #cbd5e1;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .map-control-btn.active, .map-control-btn:hover {
+            background: #0284c7;
+            color: white;
+            border-color: #38bdf8;
+        }
+    </style>
+</head>
+<body class="bg-darkBg min-h-screen flex flex-col custom-scrollbar">
+
+    <!-- TOP COMMAND HEADER -->
+    <header class="glass-card sticky top-0 z-50 px-4 md:px-6 py-3 border-b border-borderCol flex flex-wrap justify-between items-center gap-3">
+        
+        <!-- Logo & Location Identification -->
+        <div class="flex items-center space-x-3.5">
+            <div class="w-11 h-11 rounded-xl bg-gradient-to-tr from-cyan-600 via-sky-600 to-blue-700 flex items-center justify-center text-white text-xl shadow-lg shadow-sky-500/30">
+                <i class="fa-solid fa-water-ladder"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="text-base md:text-lg font-black tracking-wide text-white flex items-center gap-2">
+                        COASTAL FLOOD & STORM SURGE SYSTEM
+                    </h1>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/40 flex items-center gap-1">
+                        <i class="fa-solid fa-compass"></i> BAY OF BENGAL COAST
+                    </span>
+                </div>
+                <p class="text-xs text-slate-400 font-medium">
+                    SR UNIVERSITY • CSE (Cyber Security) • Coastal Surge Early Warning & Marine SAR Command
+                </p>
+            </div>
+        </div>
+
+        <!-- Telemetry Indicators & Quick Actions -->
+        <div class="flex items-center flex-wrap gap-2.5 text-xs font-semibold">
+            
+            <!-- Weather / Ocean Tide Pill -->
+            <div class="flex items-center gap-2 bg-[#111a2e] px-3 py-1.5 rounded-lg border border-borderCol text-slate-200 shadow-inner">
+                <i class="fa-solid fa-wind text-cyan-400 animate-pulse"></i>
+                <span>High Tide: +1.8m • Winds 45 km/h</span>
+            </div>
+
+            <!-- Time Widget -->
+            <div class="flex items-center gap-2 bg-[#111a2e] px-3 py-1.5 rounded-lg border border-borderCol text-slate-300">
+                <i class="fa-regular fa-clock text-sky-400"></i>
+                <span id="liveClock">Loading Clock...</span>
+            </div>
+
+            <!-- Emergency Severity Badge -->
+            <div class="flex items-center gap-2 bg-red-950/70 text-red-400 px-3 py-1.5 rounded-lg border border-red-700/60 radar-danger">
+                <i class="fa-solid fa-triangle-exclamation text-red-500"></i>
+                <span class="tracking-wider uppercase font-bold text-[11px]">COASTAL SURGE ALERT: +0.38m OVERTOPPING</span>
+            </div>
+
+            <!-- Audio Siren Button -->
+            <button onclick="toggleSiren()" id="sirenBtn" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1.5 rounded-lg border border-slate-700 transition" title="Toggle Emergency Siren Alert">
+                <i class="fa-solid fa-volume-xmark" id="sirenIcon"></i>
+                <span id="sirenText">Mute</span>
+            </button>
+
+            <!-- Live Telemetry Stream Simulation -->
+            <button onclick="toggleSimulation()" id="simBtn" class="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-white px-3 py-1.5 rounded-lg transition shadow-md shadow-sky-600/30">
+                <i class="fa-solid fa-satellite-dish"></i>
+                <span id="simText">Simulate Telemetry</span>
+            </button>
+
+            <!-- Urgent SOS Dispatch -->
+            <button onclick="triggerSOS()" class="bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-black px-4 py-1.5 rounded-lg shadow-lg shadow-red-600/40 flex items-center gap-1.5 transition transform hover:scale-105">
+                <i class="fa-solid fa-tower-broadcast animate-bounce"></i>
+                <span>COAST GUARD SOS</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN BODY WITH SIDEBAR -->
+    <div class="flex flex-1 overflow-hidden">
+        
+        <!-- SIDEBAR -->
+        <aside class="w-64 bg-[#0a101f] border-r border-borderCol hidden lg:flex flex-col justify-between p-4 flex-shrink-0">
+            <div class="space-y-6">
+                <!-- Navigation -->
+                <div>
+                    <p class="text-[10px] font-bold tracking-widest text-slate-500 uppercase px-3 mb-2.5">Coastal Command</p>
+                    <nav class="space-y-1">
+                        <a href="#overview" class="flex items-center gap-3 px-3.5 py-2 text-xs font-bold rounded-lg bg-sky-600 text-white shadow-md shadow-sky-600/30">
+                            <i class="fa-solid fa-chart-pie w-4 text-sm"></i> Command Dashboard
+                        </a>
+                        <a href="#mapSection" class="flex items-center gap-3 px-3.5 py-2 text-xs font-bold rounded-lg text-slate-300 hover:text-white hover:bg-[#18243f] transition">
+                            <i class="fa-solid fa-map-location-dot w-4 text-sm text-cyan-400"></i> Coastal Inundation Map
+                        </a>
+                        <a href="#predictionSection" class="flex items-center gap-3 px-3.5 py-2 text-xs font-bold rounded-lg text-slate-300 hover:text-white hover:bg-[#18243f] transition">
+                            <i class="fa-solid fa-hourglass-half w-4 text-sm text-amber-400"></i> Surge Arrival Times
+                        </a>
+                        <a href="#trendsSection" class="flex items-center gap-3 px-3.5 py-2 text-xs font-bold rounded-lg text-slate-300 hover:text-white hover:bg-[#18243f] transition">
+                            <i class="fa-solid fa-chart-line w-4 text-sm text-sky-400"></i> Tidal & Rain Trends
+                        </a>
+                        <a href="#alertsSection" class="flex items-center gap-3 px-3.5 py-2 text-xs font-bold rounded-lg text-slate-300 hover:text-white hover:bg-[#18243f] transition">
+                            <i class="fa-solid fa-bell w-4 text-sm text-red-400"></i> Coastal Storm Bulletins
+                            <span class="ml-auto bg-red-600 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full">3</span>
+                        </a>
+                        <a href="#shelterSection" class="flex items-center gap-3 px-3.5 py-2 text-xs font-bold rounded-lg text-slate-300 hover:text-white hover:bg-[#18243f] transition">
+                            <i class="fa-solid fa-building-shield w-4 text-sm text-teal-400"></i> Cyclone Shelters
+                        </a>
+                    </nav>
+                </div>
+
+                <!-- Coastal Sector Quick Selector -->
+                <div>
+                    <p class="text-[10px] font-bold tracking-widest text-slate-500 uppercase px-3 mb-2">Coastal Catchment Sectors</p>
+                    <div class="space-y-1">
+                        <button onclick="focusMapZone(0)" class="w-full text-left px-3 py-1.5 rounded text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-red-400 flex items-center justify-between">
+                            <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-red-500"></span> Sunset Beach (Marina)</span>
+                            <span class="text-[10px] text-red-400 font-bold">7.88m</span>
+                        </button>
+                        <button onclick="focusMapZone(1)" class="w-full text-left px-3 py-1.5 rounded text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-red-400 flex items-center justify-between">
+                            <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-red-500"></span> Riverside Estuary</span>
+                            <span class="text-[10px] text-red-400 font-bold">7.88m</span>
+                        </button>
+                        <button onclick="focusMapZone(2)" class="w-full text-left px-3 py-1.5 rounded text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-amber-400 flex items-center justify-between">
+                            <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-amber-500"></span> New Hope Backwater</span>
+                            <span class="text-[10px] text-amber-400 font-bold">7.10m</span>
+                        </button>
+                        <button onclick="focusMapZone(3)" class="w-full text-left px-3 py-1.5 rounded text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-emerald-400 flex items-center justify-between">
+                            <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Greenfield Ridge</span>
+                            <span class="text-[10px] text-emerald-400 font-bold">6.40m</span>
+                        </button>
+                        <button onclick="focusMapZone(4)" class="w-full text-left px-3 py-1.5 rounded text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-amber-400 flex items-center justify-between">
+                            <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Lakeview Lagoon</span>
+                            <span class="text-[10px] text-amber-400 font-bold">7.20m</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Deliverable Downloads -->
+                <div>
+                    <p class="text-[10px] font-bold tracking-widest text-slate-500 uppercase px-3 mb-2">Project Artifacts</p>
+                    <div class="space-y-1.5">
+                        <a href="clean_dataset/clean_dataset.csv" download class="flex items-center justify-between px-3 py-1.5 text-xs font-medium rounded-lg bg-[#111a2e] hover:bg-[#18243f] text-slate-300 border border-borderCol transition">
+                            <span class="flex items-center gap-2"><i class="fa-solid fa-file-csv text-emerald-400"></i> Coastal Data (5.6k)</span>
+                            <i class="fa-solid fa-download text-slate-500 text-[10px]"></i>
+                        </a>
+                        <a href="clean_dataset/clean_dataset.xlsx" download class="flex items-center justify-between px-3 py-1.5 text-xs font-medium rounded-lg bg-[#111a2e] hover:bg-[#18243f] text-slate-300 border border-borderCol transition">
+                            <span class="flex items-center gap-2"><i class="fa-solid fa-file-excel text-green-500"></i> Clean Excel</span>
+                            <i class="fa-solid fa-download text-slate-500 text-[10px]"></i>
+                        </a>
+                        <a href="Project_Report.pdf" target="_blank" class="flex items-center justify-between px-3 py-1.5 text-xs font-medium rounded-lg bg-[#111a2e] hover:bg-[#18243f] text-slate-300 border border-borderCol transition">
+                            <span class="flex items-center gap-2"><i class="fa-solid fa-file-pdf text-red-400"></i> Academic Report</span>
+                            <i class="fa-solid fa-arrow-up-right-from-square text-slate-500 text-[10px]"></i>
+                        </a>
+                        <a href="Project_PPT.pptx" download class="flex items-center justify-between px-3 py-1.5 text-xs font-medium rounded-lg bg-[#111a2e] hover:bg-[#18243f] text-slate-300 border border-borderCol transition">
+                            <span class="flex items-center gap-2"><i class="fa-solid fa-file-powerpoint text-orange-400"></i> Presentation Deck</span>
+                            <i class="fa-solid fa-download text-slate-500 text-[10px]"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Team Info Badge -->
+            <div class="bg-[#111a2e] p-3 rounded-xl border border-borderCol text-xs space-y-1">
+                <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Capstone Research Team:</div>
+                <div class="font-bold text-white text-[11px]">S. Sai Sathwik (2503A53021)</div>
+                <div class="text-[11px] text-slate-400">P. Hruthik Reddy (2503A53029)</div>
+                <div class="text-[11px] text-slate-400">G. Srikar (2503A53028)</div>
+            </div>
+        </aside>
+
+        <!-- DASHBOARD MAIN BODY -->
+        <main class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar" id="overview">
+
+            <!-- 6 TOP SCORECARDS -->
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+                
+                <!-- Card 1: Coastal Rainfall -->
+                <div class="glass-card p-4 rounded-xl border border-borderCol relative overflow-hidden group">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Coastal Rain (24h)</span>
+                        <div class="p-2 rounded-lg bg-sky-500/10 text-sky-400 group-hover:scale-110 transition"><i class="fa-solid fa-cloud-showers-heavy"></i></div>
+                    </div>
+                    <div class="text-2xl font-black text-white" id="kpiRainfall">245 <span class="text-xs font-bold text-slate-400">mm</span></div>
+                    <p class="text-[11px] text-sky-400 font-semibold mt-1 flex items-center gap-1">
+                        <i class="fa-solid fa-water"></i> Cyclone Inflow
+                    </p>
+                </div>
+
+                <!-- Card 2: Tidal Stage / River Level -->
+                <div class="glass-card p-4 rounded-xl border border-borderCol relative overflow-hidden group">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Estuary Stage</span>
+                        <div class="p-2 rounded-lg bg-red-500/10 text-red-400 group-hover:scale-110 transition"><i class="fa-solid fa-water"></i></div>
+                    </div>
+                    <div class="text-2xl font-black text-red-400" id="kpiRiverLevel">7.88 <span class="text-xs font-bold text-slate-400">m</span></div>
+                    <p class="text-[11px] text-red-400 font-bold mt-1 flex items-center gap-1">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Danger: 7.50m (+0.38m)
+                    </p>
+                </div>
+
+                <!-- Card 3: Surge Risk Category -->
+                <div class="glass-card p-4 rounded-xl border border-borderCol relative overflow-hidden group">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Storm Surge</span>
+                        <div class="p-2 rounded-lg bg-amber-500/10 text-amber-400 group-hover:scale-110 transition"><i class="fa-solid fa-shield-halved"></i></div>
+                    </div>
+                    <div class="text-2xl font-black text-amber-400" id="kpiFloodRisk">HIGH</div>
+                    <p class="text-[11px] text-slate-400 font-semibold mt-1">2 Inundated Shorelines</p>
+                </div>
+
+                <!-- Card 4: Coastal Population Exposed -->
+                <div class="glass-card p-4 rounded-xl border border-borderCol relative overflow-hidden group">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Coastal Pop. Risk</span>
+                        <div class="p-2 rounded-lg bg-purple-500/10 text-purple-400 group-hover:scale-110 transition"><i class="fa-solid fa-users-rays"></i></div>
+                    </div>
+                    <div class="text-2xl font-black text-white" id="kpiPopAtRisk">52,340</div>
+                    <p class="text-[11px] text-purple-400 font-semibold mt-1">Across 5 Shore Basins</p>
+                </div>
+
+                <!-- Card 5: Marine SAR & Boats -->
+                <div class="glass-card p-4 rounded-xl border border-borderCol relative overflow-hidden group">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Marine SAR Teams</span>
+                        <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition"><i class="fa-solid fa-sailboat"></i></div>
+                    </div>
+                    <div class="text-2xl font-black text-emerald-400" id="kpiRescueTeams">42</div>
+                    <p class="text-[11px] text-emerald-400 font-semibold mt-1">28 Boats Deployed</p>
+                </div>
+
+                <!-- Card 6: Cyclone Shelters -->
+                <div class="glass-card p-4 rounded-xl border border-borderCol relative overflow-hidden group">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Cyclone Shelters</span>
+                        <div class="p-2 rounded-lg bg-teal-500/10 text-teal-400 group-hover:scale-110 transition"><i class="fa-solid fa-building-shield"></i></div>
+                    </div>
+                    <div class="text-2xl font-black text-white" id="kpiShelters">18</div>
+                    <p class="text-[11px] text-teal-400 font-semibold mt-1">Cap: 6,400 Evacuees</p>
+                </div>
+
+            </div>
+
+            <!-- ROW 2: COASTAL INUNDATION MAP + SURGE ARRIVAL TABLE -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5" id="mapSection">
+                
+                <!-- COASTAL MAP CANVAS (7 COLS) -->
+                <div class="lg:col-span-7 glass-card p-4 rounded-xl border border-borderCol flex flex-col justify-between">
+                    
+                    <!-- Header with Basemap Selectors -->
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-earth-oceania text-cyan-400 text-base"></i>
+                                BAY OF BENGAL COASTAL INUNDATION MAP
+                            </h2>
+                            <span class="text-[11px] bg-red-950/90 text-red-400 border border-red-700/70 px-2 py-0.5 rounded font-black animate-pulse">ESTUARY BREACH</span>
+                        </div>
+
+                        <!-- 100% Free Working Map Tiles (No API Key Required) -->
+                        <div class="flex items-center gap-1.5 bg-[#080d1a] p-1 rounded-lg border border-borderCol">
+                            <button onclick="switchTileLayer('satellite')" id="btnLayerSat" class="map-control-btn active flex items-center gap-1">
+                                <i class="fa-solid fa-earth-asia"></i> Coastal Satellite
+                            </button>
+                            <button onclick="switchTileLayer('street')" id="btnLayerStreet" class="map-control-btn flex items-center gap-1">
+                                <i class="fa-solid fa-map"></i> Coastal Streets
+                            </button>
+                            <button onclick="switchTileLayer('topo')" id="btnLayerTopo" class="map-control-btn flex items-center gap-1">
+                                <i class="fa-solid fa-water"></i> Ocean Topo
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Map Display Canvas -->
+                    <div class="relative w-full overflow-hidden rounded-xl border border-slate-700/80 shadow-2xl">
+                        <div id="floodMap"></div>
+                        
+                        <!-- Coastal Map Overlay Legend -->
+                        <div class="absolute bottom-3 right-3 z-[1000] bg-slate-900/90 backdrop-blur-md px-3 py-2 rounded-lg border border-slate-700 text-[10px] space-y-1 font-semibold text-slate-300 shadow-xl">
+                            <div class="text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Coastal Inundation Risk</div>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500 border border-white"></span> Severe Surge Breached Shore (>7.5m)</div>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-amber-500 border border-white"></span> Estuary Warning Stage (>7.0m)</div>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-500 border border-white"></span> High Ridge Safe Buffer (<6.8m)</div>
+                            <div class="flex items-center gap-2 pt-1 border-t border-slate-800"><span class="w-4 h-1 bg-emerald-400"></span> East Coast Road (ECR / NH-32 Safe)</div>
+                            <div class="flex items-center gap-2"><span class="w-4 h-1 bg-red-500 border-dashed"></span> Estuary Bridge Road Submerged</div>
+                        </div>
+
+                        <!-- Reset View Button -->
+                        <button onclick="resetMapView()" class="absolute top-3 left-14 z-[1000] bg-slate-900/90 hover:bg-sky-600 text-white px-2.5 py-1 rounded-md border border-slate-700 text-xs font-bold transition flex items-center gap-1.5 shadow-lg">
+                            <i class="fa-solid fa-arrows-to-eye"></i> Reset Coastal View
+                        </button>
+                    </div>
+
+                    <!-- Map Footer Metadata -->
+                    <div class="mt-3 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2">
+                        <span class="flex items-center gap-1.5"><i class="fa-solid fa-satellite text-cyan-400"></i> Esri World Imagery Satellite Earth (Coastline & Ocean Wavefronts Visible)</span>
+                        <span class="text-emerald-400 font-bold flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> Tidal Telemetry Synced</span>
+                    </div>
+                </div>
+
+                <!-- SURGE ARRIVAL PREDICTION TABLE (5 COLS) -->
+                <div class="lg:col-span-5 glass-card p-4 rounded-xl border border-borderCol flex flex-col justify-between" id="predictionSection">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <h2 class="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-stopwatch text-amber-400"></i> STORM SURGE ARRIVAL TIMES
+                            </h2>
+                            <span class="text-[11px] text-slate-400 font-semibold bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">Tidal Crest Model</span>
+                        </div>
+
+                        <p class="text-xs text-slate-400 mb-3">
+                            Click any coastal catchment to fly the satellite map directly to the shore:
+                        </p>
+
+                        <!-- Table -->
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead>
+                                    <tr class="text-slate-400 border-b border-borderCol uppercase tracking-wider text-[10px]">
+                                        <th class="py-2.5">Coastal Sector</th>
+                                        <th class="py-2.5">Coast Dist</th>
+                                        <th class="py-2.5">Surge Arrival</th>
+                                        <th class="py-2.5 text-center">Threat</th>
+                                        <th class="py-2.5 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800/80" id="predictionTableBody">
+                                    <!-- Sunset Beach / Marina -->
+                                    <tr class="hover:bg-slate-800/60 transition cursor-pointer group" onclick="focusMapZone(0)">
+                                        <td class="py-2.5 font-bold text-white flex items-center gap-2">
+                                            <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+                                            <span class="group-hover:text-cyan-400 transition">Sunset Beach (Marina)</span>
+                                        </td>
+                                        <td class="py-2.5 text-slate-300">0.8 km (Shore)</td>
+                                        <td class="py-2.5 font-bold text-red-400">1 h 30 min</td>
+                                        <td class="py-2.5 text-center">
+                                            <span class="px-2 py-0.5 rounded bg-red-950 text-red-400 border border-red-800 text-[10px] font-bold">Critical</span>
+                                        </td>
+                                        <td class="py-2.5 text-right">
+                                            <button onclick="event.stopPropagation(); dispatchSector('Sunset Beach (Marina)', 0)" class="bg-red-600 hover:bg-red-500 text-white font-bold px-2 py-1 rounded text-[10px] transition">Evacuate</button>
+                                        </td>
+                                    </tr>
+                                    <!-- Riverside Estuary -->
+                                    <tr class="hover:bg-slate-800/60 transition cursor-pointer group" onclick="focusMapZone(1)">
+                                        <td class="py-2.5 font-bold text-white flex items-center gap-2">
+                                            <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                                            <span class="group-hover:text-cyan-400 transition">Riverside Estuary</span>
+                                        </td>
+                                        <td class="py-2.5 text-slate-300">1.2 km (Tidal)</td>
+                                        <td class="py-2.5 font-bold text-red-400">2 h 45 min</td>
+                                        <td class="py-2.5 text-center">
+                                            <span class="px-2 py-0.5 rounded bg-red-950 text-red-400 border border-red-800 text-[10px] font-bold">Critical</span>
+                                        </td>
+                                        <td class="py-2.5 text-right">
+                                            <button onclick="event.stopPropagation(); dispatchSector('Riverside Estuary', 1)" class="bg-red-600 hover:bg-red-500 text-white font-bold px-2 py-1 rounded text-[10px] transition">Evacuate</button>
+                                        </td>
+                                    </tr>
+                                    <!-- New Hope Backwater -->
+                                    <tr class="hover:bg-slate-800/60 transition cursor-pointer group" onclick="focusMapZone(2)">
+                                        <td class="py-2.5 font-bold text-white flex items-center gap-2">
+                                            <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                                            <span class="group-hover:text-cyan-400 transition">New Hope Backwater</span>
+                                        </td>
+                                        <td class="py-2.5 text-slate-300">2.5 km (Creek)</td>
+                                        <td class="py-2.5 font-bold text-amber-400">4 h 15 min</td>
+                                        <td class="py-2.5 text-center">
+                                            <span class="px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800 text-[10px] font-bold">Medium</span>
+                                        </td>
+                                        <td class="py-2.5 text-right">
+                                            <button onclick="event.stopPropagation(); dispatchSector('New Hope Backwater', 2)" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-2 py-1 rounded text-[10px] transition">Prepare</button>
+                                        </td>
+                                    </tr>
+                                    <!-- Greenfield Ridge -->
+                                    <tr class="hover:bg-slate-800/60 transition cursor-pointer group" onclick="focusMapZone(3)">
+                                        <td class="py-2.5 font-bold text-white flex items-center gap-2">
+                                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                            <span class="group-hover:text-cyan-400 transition">Greenfield Ridge</span>
+                                        </td>
+                                        <td class="py-2.5 text-slate-300">8.5 km (Inland)</td>
+                                        <td class="py-2.5 font-bold text-emerald-400">6 h 30 min</td>
+                                        <td class="py-2.5 text-center">
+                                            <span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-bold">Low</span>
+                                        </td>
+                                        <td class="py-2.5 text-right">
+                                            <button onclick="event.stopPropagation(); dispatchSector('Greenfield Ridge', 3)" class="bg-slate-700 hover:bg-slate-600 text-white font-bold px-2 py-1 rounded text-[10px] transition">Monitor</button>
+                                        </td>
+                                    </tr>
+                                    <!-- Lakeview Lagoon -->
+                                    <tr class="hover:bg-slate-800/60 transition cursor-pointer group" onclick="focusMapZone(4)">
+                                        <td class="py-2.5 font-bold text-white flex items-center gap-2">
+                                            <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                                            <span class="group-hover:text-cyan-400 transition">Lakeview Lagoon</span>
+                                        </td>
+                                        <td class="py-2.5 text-slate-300">1.8 km (Lagoon)</td>
+                                        <td class="py-2.5 font-bold text-amber-400">7 h 45 min</td>
+                                        <td class="py-2.5 text-center">
+                                            <span class="px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800 text-[10px] font-bold">Medium</span>
+                                        </td>
+                                        <td class="py-2.5 text-right">
+                                            <button onclick="event.stopPropagation(); dispatchSector('Lakeview Lagoon', 4)" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-2 py-1 rounded text-[10px] transition">Prepare</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Quick Dispatch Protocol -->
+                    <div class="mt-4 pt-3 border-t border-borderCol flex items-center justify-between">
+                        <span class="text-xs text-slate-400">Coastal Fleet Orders:</span>
+                        <button onclick="dispatchAll()" class="bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition shadow-md">
+                            <i class="fa-solid fa-ship mr-1"></i> Deploy Coast Guard Fleet
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ROW 3: FOUR INTERACTIVE ANALYTICAL CHARTS -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="trendsSection">
+                
+                <!-- Chart 1: Coastal Rainfall -->
+                <div class="glass-card p-4 rounded-xl border border-borderCol flex flex-col justify-between">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-xs font-black text-white uppercase tracking-wider">COASTAL RAINFALL (mm)</h3>
+                        <span class="text-[10px] text-cyan-400 font-bold bg-cyan-950/80 px-2 py-0.5 rounded">Peak: 38 mm/h</span>
+                    </div>
+                    <div class="h-44 w-full">
+                        <canvas id="rainfallChart"></canvas>
+                    </div>
+                    <div class="text-[10px] text-slate-400 text-center mt-1">24h Monsoon Cloudburst Precipitation</div>
+                </div>
+
+                <!-- Chart 2: Tidal Stage & River Crest -->
+                <div class="glass-card p-4 rounded-xl border border-borderCol flex flex-col justify-between">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-xs font-black text-white uppercase tracking-wider">TIDAL & RIVER STAGE (m)</h3>
+                        <span class="text-[10px] text-red-400 font-bold bg-red-950/80 px-2 py-0.5 rounded">Danger: 7.50 m</span>
+                    </div>
+                    <div class="h-44 w-full">
+                        <canvas id="riverChart"></canvas>
+                    </div>
+                    <div class="text-[10px] text-slate-400 text-center mt-1">Ocean Surge + Estuary Discharge Telemetry</div>
+                </div>
+
+                <!-- Chart 3: Coastal Population Exposure -->
+                <div class="glass-card p-4 rounded-xl border border-borderCol flex flex-col justify-between">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-xs font-black text-white uppercase tracking-wider">COASTAL DEMOGRAPHICS</h3>
+                        <span class="text-[10px] text-purple-400 font-bold bg-purple-950/80 px-2 py-0.5 rounded">52,340 Total</span>
+                    </div>
+                    <div class="h-44 w-full flex items-center justify-center">
+                        <canvas id="populationChart"></canvas>
+                    </div>
+                    <div class="text-[10px] text-slate-400 text-center mt-1">Vulnerable Fisherfolk & Shore Communities</div>
+                </div>
+
+                <!-- Chart 4: Marine Rescue Readiness -->
+                <div class="glass-card p-4 rounded-xl border border-borderCol flex flex-col justify-between" id="rescueSection">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-xs font-black text-white uppercase tracking-wider">MARINE SAR FLEET</h3>
+                        <span class="text-[10px] text-emerald-400 font-bold bg-emerald-950/80 px-2 py-0.5 rounded">42 Craft Active</span>
+                    </div>
+                    <div class="h-44 w-full flex items-center justify-center">
+                        <canvas id="rescueChart"></canvas>
+                    </div>
+                    <div class="text-[10px] text-slate-400 text-center mt-1">28 Boats in Action • 9 Standby</div>
+                </div>
+
+            </div>
+
+            <!-- ROW 4: EMERGENCY LOGISTICS & SHELTERS -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5" id="alertsSection">
+                
+                <!-- Live Coastal Storm Bulletins -->
+                <div class="glass-card p-4 rounded-xl border border-borderCol">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-bullhorn text-red-400"></i> COASTAL STORM BULLETINS
+                        </h3>
+                        <span class="text-[10px] bg-red-950 text-red-400 border border-red-800 px-1.5 py-0.5 rounded font-bold">3 Bulletins</span>
+                    </div>
+                    <div class="space-y-2.5">
+                        <div class="p-3 rounded-lg bg-red-950/40 border border-red-800/60 hover:border-red-500 transition cursor-pointer" onclick="focusMapZone(0)">
+                            <div class="flex justify-between items-center text-xs mb-1">
+                                <span class="font-bold text-red-400">Sunset Beach — Sea Wall Overtopping</span>
+                                <span class="bg-red-600 text-white font-bold px-1.5 py-0.2 rounded text-[10px]">Critical</span>
+                            </div>
+                            <p class="text-xs text-slate-200">High tidal storm surge at 7.88m overtopping sea barriers. Evacuate beach settlements inland via ECR.</p>
+                            <span class="text-[10px] text-slate-400 mt-1 block"><i class="fa-regular fa-clock mr-1"></i> Today, 08:30 AM</span>
+                        </div>
+                        <div class="p-3 rounded-lg bg-amber-950/40 border border-amber-800/60 hover:border-amber-500 transition cursor-pointer" onclick="focusMapZone(1)">
+                            <div class="flex justify-between items-center text-xs mb-1">
+                                <span class="font-bold text-amber-400">Riverside Estuary — Tidal Lock</span>
+                                <span class="bg-amber-600 text-white font-bold px-1.5 py-0.2 rounded text-[10px]">Warning</span>
+                            </div>
+                            <p class="text-xs text-slate-200">Estuary bridge submerged due to incoming ocean tide colliding with river discharge. Relocate to school shelter.</p>
+                            <span class="text-[10px] text-slate-400 mt-1 block"><i class="fa-regular fa-clock mr-1"></i> Today, 08:20 AM</span>
+                        </div>
+                        <div class="p-3 rounded-lg bg-slate-800/40 border border-slate-700/80 hover:border-blue-500 transition cursor-pointer" onclick="focusMapZone(2)">
+                            <div class="flex justify-between items-center text-xs mb-1">
+                                <span class="font-bold text-blue-400">South Lagoon Forecast</span>
+                                <span class="bg-blue-600 text-white font-bold px-1.5 py-0.2 rounded text-[10px]">Advisory</span>
+                            </div>
+                            <p class="text-xs text-slate-200">Continuous cyclonic rainfall (110mm) expected over next 6 hours in coastal backwaters.</p>
+                            <span class="text-[10px] text-slate-400 mt-1 block"><i class="fa-regular fa-clock mr-1"></i> Today, 08:10 AM</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Coastal Highway & Evacuation Route -->
+                <div class="glass-card p-4 rounded-xl border border-borderCol">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-route text-emerald-400"></i> COASTAL HIGHWAY ARTERIALS
+                        </h3>
+                        <span class="text-[10px] text-slate-400 font-semibold">Tide Monitored</span>
+                    </div>
+                    <div class="space-y-2 text-xs">
+                        <div class="p-2.5 rounded-lg bg-[#111a2e] border border-borderCol flex justify-between items-center hover:border-emerald-500 transition">
+                            <div>
+                                <span class="font-bold text-white">East Coast Highway (ECR / NH-32)</span>
+                                <p class="text-[11px] text-slate-400">Sunset Beach &rarr; Riverside Estuary (4.2 km)</p>
+                            </div>
+                            <span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold text-[10px]">Open & Elevated</span>
+                        </div>
+                        <div class="p-2.5 rounded-lg bg-[#111a2e] border border-borderCol flex justify-between items-center hover:border-red-500 transition">
+                            <div>
+                                <span class="font-bold text-white">Estuary Bridge Causeway</span>
+                                <p class="text-[11px] text-slate-400">Riverside Estuary &rarr; New Hope (2.8 km)</p>
+                            </div>
+                            <span class="px-2 py-0.5 rounded bg-red-950 text-red-400 border border-red-800 font-bold text-[10px]">Tidally Flooded</span>
+                        </div>
+                        <div class="p-2.5 rounded-lg bg-[#111a2e] border border-borderCol flex justify-between items-center hover:border-amber-500 transition">
+                            <div>
+                                <span class="font-bold text-white">Backwater Canal Road</span>
+                                <p class="text-[11px] text-slate-400">Greenfield Ridge &rarr; New Hope (5.4 km)</p>
+                            </div>
+                            <span class="px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800 font-bold text-[10px]">Waterlogged</span>
+                        </div>
+                        <div class="p-2.5 rounded-lg bg-[#111a2e] border border-borderCol flex justify-between items-center hover:border-emerald-500 transition">
+                            <div>
+                                <span class="font-bold text-white">Inland Evacuation Express Route</span>
+                                <p class="text-[11px] text-slate-400">Greenfield Ridge &rarr; Lakeview (7.0 km)</p>
+                            </div>
+                            <span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold text-[10px]">High Clearance</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cyclone Relief Shelters -->
+                <div class="glass-card p-4 rounded-xl border border-borderCol" id="shelterSection">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-building-shield text-teal-400"></i> CYCLONE RELIEF SHELTERS
+                        </h3>
+                        <span class="text-[10px] text-slate-400 font-semibold">18 Facilities</span>
+                    </div>
+                    <div class="space-y-3 text-xs">
+                        <div class="p-2.5 rounded-lg bg-[#111a2e] border border-borderCol">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="font-bold text-white">Cyclone Shelter A (Port Civic Hall)</span>
+                                <span class="text-emerald-400 font-bold">1,450 / 1,800 Beds</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-1.5 mb-1.5 overflow-hidden">
+                                <div class="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style="width: 80%"></div>
+                            </div>
+                            <div class="flex justify-between text-[10px] text-slate-400">
+                                <span>Sunset Beach (Marina)</span>
+                                <span class="text-emerald-400 font-semibold">350 Beds Free</span>
+                            </div>
+                        </div>
+
+                        <div class="p-2.5 rounded-lg bg-[#111a2e] border border-borderCol">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="font-bold text-white">Cyclone Shelter B (Estuary High School)</span>
+                                <span class="text-amber-400 font-bold">1,120 / 1,400 Beds</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-1.5 mb-1.5 overflow-hidden">
+                                <div class="bg-amber-500 h-1.5 rounded-full transition-all duration-500" style="width: 80%"></div>
+                            </div>
+                            <div class="flex justify-between text-[10px] text-slate-400">
+                                <span>Riverside Estuary</span>
+                                <span class="text-amber-400 font-semibold">280 Beds Free</span>
+                            </div>
+                        </div>
+
+                        <div class="p-2.5 rounded-lg bg-[#111a2e] border border-borderCol">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="font-bold text-white">Cyclone Shelter D (Coastal College)</span>
+                                <span class="text-teal-400 font-bold">980 / 1,600 Beds</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-1.5 mb-1.5 overflow-hidden">
+                                <div class="bg-teal-500 h-1.5 rounded-full transition-all duration-500" style="width: 61%"></div>
+                            </div>
+                            <div class="flex justify-between text-[10px] text-slate-400">
+                                <span>Lakeview Lagoon</span>
+                                <span class="text-teal-400 font-semibold">620 Beds Free</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </main>
+    </div>
+
+    <!-- SOS EMERGENCY MODAL -->
+    <div id="sosModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-card border-2 border-red-600 rounded-2xl max-w-lg w-full p-6 text-center space-y-4 shadow-2xl">
+            <div class="w-16 h-16 bg-red-600/20 text-red-500 rounded-full flex items-center justify-center text-3xl mx-auto radar-danger">
+                <i class="fa-solid fa-life-ring"></i>
+            </div>
+            <h3 class="text-xl font-black text-white">COAST GUARD & MARINE SAR DISPATCH</h3>
+            <p class="text-xs text-slate-300">
+                You are initiating an emergency coastal storm surge rescue dispatch. Inshore rescue boats, hovercrafts, and naval helicopters will mobilize immediately to beachfront low-lying areas.
+            </p>
+            <div class="bg-[#080d1a] p-4 rounded-xl text-left text-xs space-y-2 border border-borderCol text-slate-300">
+                <div><span class="text-slate-500 font-semibold">Target Shoreline Sectors:</span> <b class="text-white">Sunset Beach (Marina) & Riverside Estuary</b></div>
+                <div><span class="text-slate-500 font-semibold">Storm Surge Telemetry:</span> <b class="text-red-400">Tidal Estuary Stage at 7.88m (+0.38m Sea Barrier Overtopping)</b></div>
+                <div><span class="text-slate-500 font-semibold">Marine Craft Deployed:</span> <b class="text-emerald-400">12 Motorized Inshore Boats • 4 Coast Guard Hovercrafts</b></div>
+                <div><span class="text-slate-500 font-semibold">Safe Evacuation Route:</span> <b class="text-blue-400">East Coast Road (ECR / NH-32 Safe Inland)</b></div>
+            </div>
+            <div class="flex gap-3 pt-2">
+                <button onclick="closeSOS()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold py-2.5 rounded-lg border border-slate-700 transition">Cancel</button>
+                <button onclick="confirmSOS()" class="flex-1 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-xs font-black py-2.5 rounded-lg shadow-lg shadow-red-600/40 transition">Authorize Marine Rescue</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-slate-900 border border-sky-500 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 text-xs font-semibold">
+        <i class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
+        <span id="toastMsg">Dispatch command transmitted successfully.</span>
+    </div>
+
+    <!-- JAVASCRIPT CONTROLLERS -->
+    <script>
+        // 1. Clock
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+            const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+            document.getElementById('liveClock').textContent = `${timeStr} | ${dateStr}`;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // 2. Leaflet Coastal Map Engine (Bay of Bengal / Coastline - NO API KEY REQUIRED)
+        // Center: Coastal shoreline where river estuaries meet the Bay of Bengal
+        const coastalCenter = [13.045, 80.265];
+        const map = L.map('floodMap', {
+            center: coastalCenter,
+            zoom: 12,
+            zoomControl: true,
+            attributionControl: false
+        });
+
+        // 100% Free, Zero API-Key Basemaps
+        const tileLayers = {
+            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 18,
+                attribution: 'Esri Satellite'
+            }),
+            street: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: 'OpenStreetMap'
+            }),
+            topo: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 18,
+                attribution: 'Esri World Topo'
+            })
+        };
+
+        tileLayers.satellite.addTo(map);
+
+        function switchTileLayer(layerKey) {
+            Object.values(tileLayers).forEach(layer => map.removeLayer(layer));
+            tileLayers[layerKey].addTo(map);
+
+            document.getElementById('btnLayerSat').classList.toggle('active', layerKey === 'satellite');
+            document.getElementById('btnLayerStreet').classList.toggle('active', layerKey === 'street');
+            document.getElementById('btnLayerTopo').classList.toggle('active', layerKey === 'topo');
+
+            showToast(`Switched map basemap to: ${layerKey.toUpperCase()}`);
+        }
+
+        // Coastal Spatial Catchments (Positioned along the Bay of Bengal shoreline & river mouths)
+        const catchments = [
+            {
+                name: "Sunset Beach (Marina Sector)",
+                center: [13.065, 80.285],
+                polygon: [
+                    [13.085, 80.278], [13.090, 80.302], [13.055, 80.298],
+                    [13.045, 80.282], [13.055, 80.270]
+                ],
+                status: "Flooded (Surge)",
+                threat: "Critical",
+                color: "#ef4444",
+                stage: "7.88m (Danger: 7.50m)",
+                rain: "245mm",
+                popAtRisk: "18,500",
+                shelter: "Port Civic Hall (350 Beds Free)",
+                action: "Sea wall breach! Immediate boat evacuation."
+            },
+            {
+                name: "Riverside Estuary (Adyar Mouth)",
+                center: [13.010, 80.260],
+                polygon: [
+                    [13.025, 80.245], [13.030, 80.275], [13.000, 80.278],
+                    [12.990, 80.255], [13.000, 80.238]
+                ],
+                status: "Flooded (Tidal Lock)",
+                threat: "Critical",
+                color: "#ef4444",
+                stage: "7.88m (Danger: 7.50m)",
+                rain: "228mm",
+                popAtRisk: "14,200",
+                shelter: "Estuary High School (280 Beds Free)",
+                action: "Tidal backflow overtopping. Evacuate via ECR."
+            },
+            {
+                name: "New Hope Backwater",
+                center: [12.950, 80.240],
+                polygon: [
+                    [12.965, 80.225], [12.970, 80.255], [12.940, 80.260],
+                    [12.930, 80.242], [12.938, 80.220]
+                ],
+                status: "Warning",
+                threat: "Medium",
+                color: "#f59e0b",
+                stage: "7.10m (Danger: 7.30m)",
+                rain: "190mm",
+                popAtRisk: "8,750",
+                shelter: "Backwater Relief Center (480 Beds Free)",
+                action: "Prepare for rising high-tide surge."
+            },
+            {
+                name: "Greenfield Ridge (Inland High Ground)",
+                center: [13.055, 80.190],
+                polygon: [
+                    [13.075, 80.170], [13.080, 80.210], [13.045, 80.215],
+                    [13.035, 80.190], [13.042, 80.168]
+                ],
+                status: "Safe Buffer",
+                threat: "Low",
+                color: "#10b981",
+                stage: "6.40m (Danger: 7.20m)",
+                rain: "125mm",
+                popAtRisk: "6,120",
+                shelter: "Sports Complex (750 Beds Free)",
+                action: "High elevation safe receptor for evacuees."
+            },
+            {
+                name: "Lakeview Lagoon (North Coastal Bay)",
+                center: [13.140, 80.300],
+                polygon: [
+                    [13.160, 80.285], [13.165, 80.320], [13.125, 80.325],
+                    [13.115, 80.298], [13.128, 80.278]
+                ],
+                status: "Warning",
+                threat: "Medium",
+                color: "#f59e0b",
+                stage: "7.20m (Danger: 7.30m)",
+                rain: "175mm",
+                popAtRisk: "4,770",
+                shelter: "Lagoon College Shelter (620 Beds Free)",
+                action: "Lagoon waterlogging; avoid beach access."
+            }
+        ];
+
+        const zoneLayers = [];
+
+        // Draw Inundation Polygons & Coastal Pulse Beacons
+        catchments.forEach((zone, idx) => {
+            const poly = L.polygon(zone.polygon, {
+                color: zone.color,
+                fillColor: zone.color,
+                fillOpacity: 0.48,
+                weight: 2.5
+            }).addTo(map);
+
+            poly.bindTooltip(`${zone.name} (${zone.threat})`, {
+                permanent: true,
+                direction: "center",
+                className: "leaflet-tooltip-custom"
+            });
+
+            const popupContent = `
+                <div style="font-family: sans-serif; font-size: 11px; line-height: 1.5; min-width: 220px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #334155; padding-bottom: 5px; margin-bottom: 6px;">
+                        <b style="font-size: 13px; color: ${zone.color};">${zone.name}</b>
+                        <span style="background: ${zone.color}; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 9px;">${zone.status.toUpperCase()}</span>
+                    </div>
+                    <div><b>Tidal / River Stage:</b> <span style="color:#38bdf8;">${zone.stage}</span></div>
+                    <div><b>24h Rainfall:</b> ${zone.rain}</div>
+                    <div><b>Coastal Pop at Risk:</b> ${zone.popAtRisk}</div>
+                    <div><b>Designated Shelter:</b> ${zone.shelter}</div>
+                    <div style="margin-top: 6px; padding: 4px; background: rgba(0,0,0,0.35); border-radius: 4px; border-left: 3px solid ${zone.color};">
+                        <b>Coastal Protocol:</b> ${zone.action}
+                    </div>
+                    <button onclick="dispatchSector('${zone.name}', ${idx})" style="width:100%; margin-top:8px; background:#0284c7; color:white; border:none; padding:6px; border-radius:5px; font-weight:bold; cursor:pointer;">
+                        Dispatch Marine Rescue Boats Here
+                    </button>
+                </div>
+            `;
+            poly.bindPopup(popupContent);
+
+            const marker = L.circleMarker(zone.center, {
+                radius: 8,
+                color: '#ffffff',
+                weight: 2,
+                fillColor: zone.color,
+                fillOpacity: 0.95
+            }).addTo(map);
+            marker.bindPopup(popupContent);
+
+            zoneLayers.push({ poly, marker, zone });
+        });
+
+        // Coastal Evacuation Highways:
+        // 1. East Coast Road (ECR / NH-32) - Running elevated along coast (Green glowing line)
+        const ecrRoute = [
+            [12.950, 80.240], [13.010, 80.260], [13.065, 80.285], [13.140, 80.300]
+        ];
+        L.polyline(ecrRoute, {
+            color: '#10b981',
+            weight: 4.5,
+            dashArray: '8, 8',
+            opacity: 0.95
+        }).addTo(map).bindPopup("<b>East Coast Road (ECR / NH-32):</b> Elevated coastal highway open for rapid inland evacuation.");
+
+        // 2. Submerged Estuary Causeway Bridge (Red Line)
+        const causewayClosed = [
+            [13.010, 80.260], [13.020, 80.240], [13.055, 80.190]
+        ];
+        L.polyline(causewayClosed, {
+            color: '#ef4444',
+            weight: 5,
+            opacity: 0.95
+        }).addTo(map).bindPopup("<b>Estuary Causeway Bridge:</b> CLOSED — Submerged under 1.8m storm surge backwaters!");
+
+        function resetMapView() {
+            map.setView(coastalCenter, 12);
+        }
+
+        function focusMapZone(index) {
+            const item = zoneLayers[index];
+            if (!item) return;
+            map.flyTo(item.zone.center, 13, { duration: 1.2 });
+            setTimeout(() => {
+                item.poly.openPopup(item.zone.center);
+            }, 1200);
+            showToast(`Map centered on: ${item.zone.name} (${item.zone.status})`);
+        }
+
+        // 3. Chart.js Implementations
+        const ctxRain = document.getElementById('rainfallChart').getContext('2d');
+        const rainChart = new Chart(ctxRain, {
+            type: 'line',
+            data: {
+                labels: ['12 AM', '3 AM', '6 AM', '9 AM', '12 PM', '3 PM', '6 PM', '9 PM', '12 AM'],
+                datasets: [{
+                    label: 'Precipitation (mm)',
+                    data: [18, 24, 45, 38, 29, 32, 41, 48, 35],
+                    borderColor: '#38bdf8',
+                    backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                    fill: true,
+                    tension: 0.4,
+                    borderWidth: 2.5,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#ffffff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
+                    y: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: '#1e293b' } }
+                }
+            }
+        });
+
+        const ctxRiver = document.getElementById('riverChart').getContext('2d');
+        const riverChart = new Chart(ctxRiver, {
+            type: 'line',
+            data: {
+                labels: ['12 AM', '3 AM', '6 AM', '9 AM', '12 PM', '3 PM', '6 PM', '9 PM', '12 AM'],
+                datasets: [
+                    {
+                        label: 'Estuary Stage (m)',
+                        data: [5.4, 5.9, 6.5, 7.1, 7.4, 7.6, 7.82, 7.88, 7.94],
+                        borderColor: '#f43f5e',
+                        backgroundColor: 'rgba(244, 63, 94, 0.2)',
+                        fill: true,
+                        tension: 0.35,
+                        borderWidth: 2.5,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#ffffff'
+                    },
+                    {
+                        label: 'Danger Threshold (7.50m)',
+                        data: [7.5, 7.5, 7.5, 7.5, 7.5, 7.5, 7.5, 7.5, 7.5],
+                        borderColor: '#ef4444',
+                        borderDash: [6, 4],
+                        borderWidth: 2,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
+                    y: { min: 4.5, max: 8.5, ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: '#1e293b' } }
+                }
+            }
+        });
+
+        const ctxPop = document.getElementById('populationChart').getContext('2d');
+        const popChart = new Chart(ctxPop, {
+            type: 'doughnut',
+            data: {
+                labels: ['Sunset Beach (18.5k)', 'Riverside Estuary (14.2k)', 'New Hope (8.7k)', 'Greenfield (6.1k)', 'Lakeview (4.7k)'],
+                datasets: [{
+                    data: [18500, 14200, 8750, 6120, 4770],
+                    backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#10b981', '#0ea5e9'],
+                    borderWidth: 2,
+                    borderColor: '#111a2e'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '72%',
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        const ctxRescue = document.getElementById('rescueChart').getContext('2d');
+        const rescueChart = new Chart(ctxRescue, {
+            type: 'doughnut',
+            data: {
+                labels: ['In Operation (28)', 'On Standby (9)', 'Returning (3)', 'Maintenance (2)'],
+                datasets: [{
+                    data: [28, 9, 3, 2],
+                    backgroundColor: ['#10b981', '#0284c7', '#f59e0b', '#64748b'],
+                    borderWidth: 2,
+                    borderColor: '#111a2e'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '72%',
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // 4. Audio Alert Synthesizer
+        let audioCtx = null;
+        let sirenOscillator = null;
+        let isSirenOn = false;
+
+        function toggleSiren() {
+            isSirenOn = !isSirenOn;
+            const btnText = document.getElementById('sirenText');
+            const icon = document.getElementById('sirenIcon');
+
+            if (isSirenOn) {
+                try {
+                    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(650, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.4);
+                    gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start();
+                    sirenOscillator = osc;
+
+                    btnText.textContent = "Siren ON";
+                    icon.className = "fa-solid fa-volume-high text-red-400";
+                    showToast("🚨 Coastal storm surge audio alert activated.");
+                } catch(e) {
+                    console.log("Audio API issue:", e);
+                }
+            } else {
+                if (sirenOscillator) {
+                    try { sirenOscillator.stop(); } catch(e){}
+                    sirenOscillator = null;
+                }
+                btnText.textContent = "Mute";
+                icon.className = "fa-solid fa-volume-xmark";
+                showToast("Siren muted.");
+            }
+        }
+
+        // 5. Telemetry Streamer Simulation
+        let simInterval = null;
+        let isSimulating = false;
+
+        function toggleSimulation() {
+            isSimulating = !isSimulating;
+            const btn = document.getElementById('simBtn');
+            const text = document.getElementById('simText');
+
+            if (isSimulating) {
+                btn.className = "flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg transition shadow-md shadow-emerald-600/30 animate-pulse";
+                text.textContent = "Streaming Live...";
+                showToast("Live coastal tide & rainfall telemetry stream initiated.");
+
+                simInterval = setInterval(() => {
+                    const deltaRain = (Math.random() * 2 - 0.7).toFixed(1);
+                    const deltaWater = (Math.random() * 0.03 - 0.01).toFixed(2);
+                    
+                    const curRain = parseFloat(document.getElementById('kpiRainfall').textContent);
+                    const curWater = parseFloat(document.getElementById('kpiRiverLevel').textContent);
+                    
+                    document.getElementById('kpiRainfall').innerHTML = `${(curRain + parseFloat(deltaRain)).toFixed(0)} <span class="text-xs font-bold text-slate-400">mm</span>`;
+                    document.getElementById('kpiRiverLevel').innerHTML = `${(curWater + parseFloat(deltaWater)).toFixed(2)} <span class="text-xs font-bold text-slate-400">m</span>`;
+                }, 1800);
+            } else {
+                clearInterval(simInterval);
+                btn.className = "flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-white px-3 py-1.5 rounded-lg transition shadow-md shadow-sky-600/30";
+                text.textContent = "Simulate Telemetry";
+                showToast("Telemetry stream returned to calibrated baseline.");
+            }
+        }
+
+        // 6. Modal and Dispatch Actions
+        function triggerSOS() {
+            document.getElementById('sosModal').classList.remove('hidden');
+        }
+        function closeSOS() {
+            document.getElementById('sosModal').classList.add('hidden');
+        }
+        function confirmSOS() {
+            closeSOS();
+            showToast("🚨 COAST GUARD AUTHORIZED: Marine boat fleets deployed to Sunset Beach & Riverside Estuary.");
+        }
+        function dispatchAll() {
+            showToast("Fleet orders issued: All 42 marine SAR boats deployed across shoreline.");
+        }
+        function dispatchSector(name, idx) {
+            focusMapZone(idx);
+            showToast(`⚓ Coastal SAR craft redirected to: ${name}`);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').textContent = msg;
+            toast.classList.remove('translate-y-24', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-24', 'opacity-0');
+            }, 3500);
+        }
+    </script>
+</body>
+</html>
